@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en" data-color-scheme="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Enhanced Maritime Situational Awareness System</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <!-- Libraries for file parsing -->
+    <script src="https://unpkg.com/mammoth@1.4.0/mammoth.browser.min.js"></script>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/tesseract.js@4.0.0/dist/tesseract.min.js"></script>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="login-screen" class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo">
+                    <i class="fas fa-anchor"></i>
+                    <h1>Indian Maritime Command</h1>
+                </div>
+                <p>Enhanced Situational Awareness System</p>
+            </div>
+            <div class="login-form">
+                <div class="form-group">
+                    <label class="form-label">Officer ID</label>
+                    <input type="text" id="username" class="form-control" placeholder="Enter your officer ID" value="DEMO001" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Security Code</label>
+                    <input type="password" id="password" class="form-control" placeholder="Enter security code" value="demo123" />
+                </div>
+                <button class="btn btn--primary btn--full-width" onclick="loginToSystem()">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Access Command Center
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p>Loading Maritime System Data...</p>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div class="main-app hidden" id="main-app">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <div class="logo">
+                    <i class="fas fa-anchor"></i>
+                    <h1>Indian Maritime Command Center</h1>
+                </div>
+                <div class="system-status">
+                    <span class="status-indicator online">
+                        <i class="fas fa-circle"></i>
+                        System Online
+                    </span>
+                    <span class="last-update">Last Update: <span id="last-update-time">--</span></span>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="user-info">
+                    <div class="user-avatar">
+                        <i class="fas fa-user-shield"></i>
+                    </div>
+                    <div class="user-details">
+                        <span class="user-name" id="current-user">Maritime Officer</span>
+                        <span class="user-role">Operations Command</span>
+                    </div>
+                </div>
+                <button id="logout-btn" class="btn btn--secondary" onclick="logoutFromSystem()">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Logout
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Layout -->
+        <div class="app-layout">
+            <!-- Sidebar Navigation -->
+            <nav class="sidebar">
+                <div class="nav-menu">
+                    <a href="#" class="nav-item active" data-page="dashboard" onclick="navigateToPage('dashboard')">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    <a href="#" class="nav-item" data-page="map" onclick="navigateToPage('map')">
+                        <i class="fas fa-map"></i>
+                        <span>Map View</span>
+                    </a>
+                    <a href="#" class="nav-item" data-page="vessels" onclick="navigateToPage('vessels')">
+                        <i class="fas fa-ship"></i>
+                        <span>Vessels</span>
+                    </a>
+                    <a href="#" class="nav-item" data-page="alerts" onclick="navigateToPage('alerts')">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>Alerts</span>
+                    </a>
+                    <div class="nav-divider"></div>
+                    <a href="#" class="nav-item" data-page="file-upload" onclick="navigateToPage('file-upload')">
+                        <i class="fas fa-upload"></i>
+                        <span>File Upload</span>
+                    </a>
+                    <a href="#" class="nav-item" data-page="manual-input" onclick="navigateToPage('manual-input')">
+                        <i class="fas fa-edit"></i>
+                        <span>Manual Input</span>
+                    </a>
+                    <a href="#" class="nav-item" data-page="text-processing" onclick="navigateToPage('text-processing')">
+                        <i class="fas fa-file-text"></i>
+                        <span>Text Processing</span>
+                    </a>
+                    <div class="nav-divider"></div>
+                    <a href="#" class="nav-item" data-page="data-management" onclick="navigateToPage('data-management')">
+                        <i class="fas fa-database"></i>
+                        <span>Data Management</span>
+                    </a>
+                </div>
+            </nav>
+
+            <!-- Main Content Area -->
+            <main class="content">
+                <!-- Dashboard Page -->
+                <div id="dashboard-page" class="page active">
+                    <div class="page-header">
+                        <h2>Maritime Situational Awareness Dashboard</h2>
+                        <p>Real-time monitoring of Indian maritime domain</p>
+                    </div>
+
+                    <!-- KPI Cards -->
+                    <div class="kpi-grid">
+                        <div class="kpi-card">
+                            <div class="kpi-icon">
+                                <i class="fas fa-ship"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <h3 id="total-vessels">0</h3>
+                                <p>Total Vessels</p>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon friendly">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <h3 id="friendly-vessels">0</h3>
+                                <p>Friendly Vessels</p>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <h3 id="suspicious-vessels">0</h3>
+                                <p>Suspicious Vessels</p>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon alert">
+                                <i class="fas fa-bell"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <h3 id="active-alerts">0</h3>
+                                <p>Active Alerts</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dashboard Content Grid -->
+                    <div class="dashboard-grid">
+                        <!-- Mini Map -->
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3>Maritime Overview</h3>
+                            </div>
+                            <div class="card-content">
+                                <div id="dashboard-mini-map" class="mini-map"></div>
+                            </div>
+                        </div>
+
+                        <!-- Recent Alerts -->
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3>Recent Alerts</h3>
+                            </div>
+                            <div class="card-content">
+                                <div id="recent-alerts" class="alerts-list">
+                                    <div class="alert-item">
+                                        <p>Loading alerts...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Vessel Summary -->
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3>Active Vessels</h3>
+                            </div>
+                            <div class="card-content">
+                                <div id="vessel-summary" class="vessel-summary-list">
+                                    <div class="vessel-item">
+                                        <p>Loading vessels...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- System Status -->
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3>System Status</h3>
+                            </div>
+                            <div class="card-content">
+                                <div class="status-grid">
+                                    <div class="status-item">
+                                        <span class="status-label">Database Status</span>
+                                        <span class="status-value online" id="db-status">Online</span>
+                                    </div>
+                                    <div class="status-item">
+                                        <span class="status-label">Data Persistence</span>
+                                        <span class="status-value" id="persistence-status">Active</span>
+                                    </div>
+                                    <div class="status-item">
+                                        <span class="status-label">Vessels Tracked</span>
+                                        <span class="status-value" id="tracked-vessels">0</span>
+                                    </div>
+                                    <div class="status-item">
+                                        <span class="status-label">System Uptime</span>
+                                        <span class="status-value">99.8%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Map Page -->
+                <div id="map-page" class="page">
+                    <div class="page-header">
+                        <h2>Interactive Maritime Map</h2>
+                        <p>Real-time vessel positions and maritime zones</p>
+                    </div>
+                    <div class="map-container">
+                        <div id="main-map" class="main-map"></div>
+                        <div class="map-legend">
+                            <h4>Map Layers</h4>
+                            <div class="legend-item">
+                                <input type="checkbox" id="boundary-toggle" checked />
+                                <label for="boundary-toggle">Indian Maritime Boundary</label>
+                            </div>
+                            <div class="legend-item">
+                                <input type="checkbox" id="vessels-toggle" checked />
+                                <label for="vessels-toggle">All Vessels</label>
+                            </div>
+                            <div class="legend-item">
+                                <input type="checkbox" id="patrol-toggle" checked />
+                                <label for="patrol-toggle">Patrol Zones</label>
+                            </div>
+                            <div class="legend-item">
+                                <input type="checkbox" id="exercise-toggle" checked />
+                                <label for="exercise-toggle">Exercise Areas</label>
+                            </div>
+                            <div class="legend-item">
+                                <input type="checkbox" id="piracy-toggle" checked />
+                                <label for="piracy-toggle">Piracy Zones</label>
+                            </div>
+                            <div class="legend-item">
+                                <input type="checkbox" id="checkpoints-toggle" checked />
+                                <label for="checkpoints-toggle">Security Checkpoints</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vessels Page -->
+                <div id="vessels-page" class="page">
+                    <div class="page-header">
+                        <h2>Vessel Management</h2>
+                        <p>Monitor and manage all tracked vessels</p>
+                    </div>
+                    <div class="vessels-container">
+                        <div class="table-container">
+                            <table class="vessels-table">
+                                <thead>
+                                    <tr>
+                                        <th>Vessel ID</th>
+                                        <th>Name</th>
+                                        <th>Type</th>
+                                        <th>Status</th>
+                                        <th>Position</th>
+                                        <th>Speed</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="vessels-table-body">
+                                    <tr>
+                                        <td colspan="7" class="text-center">Loading vessels...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Alerts Page -->
+                <div id="alerts-page" class="page">
+                    <div class="page-header">
+                        <h2>Alert Management</h2>
+                        <p>Monitor security alerts and system notifications</p>
+                    </div>
+                    <div class="alerts-container">
+                        <div id="alerts-list" class="alerts-grid">
+                            <div class="alert-card">
+                                <p>Loading alerts...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File Upload Page -->
+                <div id="file-upload-page" class="page">
+                    <div class="page-header">
+                        <h2>File Upload & Processing</h2>
+                        <p>Upload maritime datasets (.md, .csv, .xlsx, .docx, .txt, .json, .pdf, .jpg, .png)</p>
+                    </div>
+                    <div class="upload-container">
+                        <div class="upload-area" id="upload-area">
+                            <div class="upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                            </div>
+                            <h3>Drop files here or click to upload</h3>
+                            <p>Supported formats: .md, .csv, .xlsx, .docx, .txt, .json, .pdf, .jpg, .png</p>
+                            <input type="file" id="file-input" multiple accept=".md,.csv,.xlsx,.docx,.txt,.json,.pdf,.jpg,.png" class="hidden" />
+                            <button class="btn btn--primary" onclick="document.getElementById('file-input').click()">
+                                <i class="fas fa-upload"></i>
+                                Select Files
+                            </button>
+                        </div>
+                        <div id="upload-results" class="upload-results"></div>
+                    </div>
+                </div>
+
+                <!-- Manual Input Page -->
+                <div id="manual-input-page" class="page">
+                    <div class="page-header">
+                        <h2>Manual Vessel Input</h2>
+                        <p>Add vessel information manually</p>
+                    </div>
+                    <div class="form-container">
+                        <form id="manual-vessel-form" class="vessel-form">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label">Vessel ID</label>
+                                    <input type="text" name="vessel_id" class="form-control" required />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Vessel Name</label>
+                                    <input type="text" name="name" class="form-control" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">MMSI</label>
+                                    <input type="text" name="mmsi" class="form-control" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Vessel Type</label>
+                                    <select name="vessel_type" class="form-control">
+                                        <option value="Naval Vessel">Naval Vessel</option>
+                                        <option value="Coast Guard">Coast Guard</option>
+                                        <option value="Cargo Ship">Cargo Ship</option>
+                                        <option value="Container Ship">Container Ship</option>
+                                        <option value="Tanker">Tanker</option>
+                                        <option value="Fishing Vessel">Fishing Vessel</option>
+                                        <option value="Passenger Ship">Passenger Ship</option>
+                                        <option value="Unknown">Unknown</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Latitude</label>
+                                    <input type="number" name="latitude" class="form-control" step="0.0001" required />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Longitude</label>
+                                    <input type="number" name="longitude" class="form-control" step="0.0001" required />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Speed (knots)</label>
+                                    <input type="number" name="speed" class="form-control" step="0.1" min="0" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Course (degrees)</label>
+                                    <input type="number" name="course" class="form-control" min="0" max="360" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Status</label>
+                                    <select name="is_friendly" class="form-control">
+                                        <option value="true">Friendly</option>
+                                        <option value="false">Non-Friendly</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Flag State</label>
+                                    <input type="text" name="flag" class="form-control" />
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn--primary">
+                                    <i class="fas fa-plus"></i>
+                                    Add Vessel
+                                </button>
+                                <button type="reset" class="btn btn--secondary">
+                                    <i class="fas fa-undo"></i>
+                                    Reset Form
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Text Processing Page -->
+                <div id="text-processing-page" class="page">
+                    <div class="page-header">
+                        <h2>Text Processing</h2>
+                        <p>Process surveillance logs and communication messages</p>
+                    </div>
+                    <div class="text-processing-container">
+                        <div class="processing-grid">
+                            <div class="processing-input">
+                                <h3>Input Text</h3>
+                                <textarea id="text-input" class="text-area"
+                                    placeholder="Paste surveillance logs, communication messages, or maritime reports here...
+
+Example:
+Date: 2024-10-20
+Time: 17:20 UTC
+Location: Aerial Patrol Charlie
+Report: Unidentified fast-moving craft at 13°05'N, 71°10'W. Heading 270°, estimated speed 35 knots.
+
+FROM: MARITIME BORDER PATROL ZULU
+TO: CUSTOMS ENFORCEMENT
+PRIORITY: URGENT
+DTG: 221230Z OCT 24
+1. INTERCEPTED SUSPICIOUS VESSEL AT 13°15'N, 70°40'W."></textarea>
+                                <div class="processing-actions">
+                                    <button id="process-text-btn" class="btn btn--primary" onclick="processText()">
+                                        <i class="fas fa-cogs"></i>
+                                        Process Text
+                                    </button>
+                                    <button id="clear-text-btn" class="btn btn--secondary" onclick="clearText()">
+                                        <i class="fas fa-trash"></i>
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="processing-output">
+                                <h3>Processing Results</h3>
+                                <div id="processing-results" class="results-container">
+                                    <div class="results-placeholder">
+                                        <i class="fas fa-search"></i>
+                                        <p>Enter text and click "Process Text" to extract vessel data</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Management Page -->
+                <div id="data-management-page" class="page">
+                    <div class="page-header">
+                        <h2>Data Management</h2>
+                        <p>Manage system data, exports, and statistics</p>
+                    </div>
+                    <div class="data-management-container">
+                        <div class="management-grid">
+                            <!-- Statistics Card -->
+                            <div class="management-card">
+                                <div class="card-header">
+                                    <h3>System Statistics</h3>
+                                </div>
+                                <div class="card-content">
+                                    <div id="data-stats" class="stats-list">
+                                        <div class="stat-row">
+                                            <span class="stat-label">Total Vessels:</span>
+                                            <span class="stat-value" id="stat-total-vessels">0</span>
+                                        </div>
+                                        <div class="stat-row">
+                                            <span class="stat-label">Friendly Vessels:</span>
+                                            <span class="stat-value" id="stat-friendly-vessels">0</span>
+                                        </div>
+                                        <div class="stat-row">
+                                            <span class="stat-label">Suspicious Vessels:</span>
+                                            <span class="stat-value" id="stat-suspicious-vessels">0</span>
+                                        </div>
+                                        <div class="stat-row">
+                                            <span class="stat-label">Total Alerts:</span>
+                                            <span class="stat-value" id="stat-total-alerts">0</span>
+                                        </div>
+                                        <div class="stat-row">
+                                            <span class="stat-label">Persistence Status:</span>
+                                            <span class="stat-value online" id="stat-persistence-status">Active</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Export Data Card -->
+                            <div class="management-card">
+                                <div class="card-header">
+                                    <h3>Data Export</h3>
+                                </div>
+                                <div class="card-content">
+                                    <div class="export-options">
+                                        <button id="export-vessels-btn" class="btn btn--primary btn--block" onclick="msaSystem.exportData('txt')">
+                                            <i class="fas fa-download"></i>
+                                            Export Data (TXT)
+                                        </button>
+                                        <button id="export-csv-btn" class="btn btn--secondary btn--block" onclick="msaSystem.exportData('csv')">
+                                            <i class="fas fa-file-csv"></i>
+                                            Export Vessel Data (CSV)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Import Data Card -->
+                            <div class="management-card">
+                                <div class="card-header">
+                                    <h3>Data Import</h3>
+                                </div>
+                                <div class="card-content">
+                                    <div class="import-options">
+                                        <input type="file" id="import-file-input" accept=".txt" class="hidden" />
+                                        <button class="btn btn--success btn--block" onclick="document.getElementById('import-file-input').click()">
+                                            <i class="fas fa-upload"></i>
+                                            Import Data from TXT
+                                        </button>
+                                        <p id="import-status" class="import-status">No file imported yet.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Data Management Actions -->
+                            <div class="management-card">
+                                <div class="card-header">
+                                    <h3>Data Management</h3>
+                                </div>
+                                <div class="card-content">
+                                    <div class="management-actions">
+                                        <button id="refresh-data-btn" class="btn btn--success btn--block" onclick="msaSystem.refreshAllData()">
+                                            <i class="fas fa-refresh"></i>
+                                            Refresh Data
+                                        </button>
+                                        <button id="backup-data-btn" class="btn btn--warning btn--block" onclick="msaSystem.backupData()">
+                                            <i class="fas fa-save"></i>
+                                            Backup Data
+                                        </button>
+                                        <button id="clear-data-btn" class="btn btn--danger btn--block" onclick="msaSystem.clearAllData()">
+                                            <i class="fas fa-trash-alt"></i>
+                                            Clear All Data
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
