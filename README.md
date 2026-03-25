@@ -1,5 +1,8 @@
 📌 Overview
 
+Working Link-
+https://mevaibhavpandey.github.io/Maritime-Situational-Awareness/
+
 The Maritime Situational Awareness (MSA) System is a centralized, web-based command and control platform designed to support real-time maritime surveillance, vessel monitoring, threat detection, and operational decision-making across vast maritime domains.
 
 This project simulates the core principles and functional architecture used by modern maritime forces such as the Indian Navy and Indian Coast Guard, where data from multiple sources is fused into a single operational picture to enhance maritime domain awareness (MDA).
