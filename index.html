@@ -254,7 +254,7 @@
                             <h4>Map Layers</h4>
                             <div class="legend-item">
                                 <input type="checkbox" id="boundary-toggle" checked />
-                                <label for="boundary-toggle">Indian Maritime Boundary</label>
+                                <label for="boundary-toggle">India 200-NM Maritime Boundary</label>
                             </div>
                             <div class="legend-item">
                                 <input type="checkbox" id="vessels-toggle" checked />
@@ -329,7 +329,7 @@
                 <div id="file-upload-page" class="page">
                     <div class="page-header">
                         <h2>File Upload & Processing</h2>
-                        <p>Upload maritime datasets (.md, .csv, .xlsx, .docx, .txt, .json, .pdf, .jpg, .png)</p>
+                        <p>Upload maritime datasets (.txt, .md, .csv, .xlsx, .docx, .json, .jpg, .png, .webp, .bmp)</p>
                     </div>
                     <div class="upload-container">
                         <div class="upload-area" id="upload-area">
@@ -337,8 +337,11 @@
                                 <i class="fas fa-cloud-upload-alt"></i>
                             </div>
                             <h3>Drop files here or click to upload</h3>
-                            <p>Supported formats: .md, .csv, .xlsx, .docx, .txt, .json, .pdf, .jpg, .png</p>
-                            <input type="file" id="file-input" multiple accept=".md,.csv,.xlsx,.docx,.txt,.json,.pdf,.jpg,.png" class="hidden" />
+                            <p>Supported formats: .txt, .md, .csv, .xlsx, .docx, .json, .jpg, .png, .webp, .bmp</p>
+                            <p style="font-size: 0.85rem; color: rgba(232, 244, 248, 0.5); margin-top: 0.5rem;">
+                                <i class="fas fa-info-circle"></i> For images: OCR will extract text automatically using Tesseract.js (works offline!)
+                            </p>
+                            <input type="file" id="file-input" multiple accept=".md,.csv,.xlsx,.docx,.txt,.json,.jpg,.jpeg,.png,.webp,.bmp" class="hidden" />
                             <button class="btn btn--primary" onclick="document.getElementById('file-input').click()">
                                 <i class="fas fa-upload"></i>
                                 Select Files
@@ -578,6 +581,6 @@ DTG: 221230Z OCT 24
 
     <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>
