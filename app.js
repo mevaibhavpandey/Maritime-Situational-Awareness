@@ -1,10 +1,11 @@
+import { processOCRWithSarvam } from './sarvamOCR.js';
+
 class EnhancedMSASystem {
     constructor() {
         this.currentPage = 'dashboard';
         this.maps = { mini: null, main: null };
         this.layers = {
-            boundaryWest: null,
-            boundaryEast: null,
+            maritimeBoundary: null,
             vessels: L.layerGroup(),
             patrol: L.layerGroup(),
             exercise: L.layerGroup(),
@@ -27,22 +28,20 @@ class EnhancedMSASystem {
         this.dbVersion = 1;
         this.apiKey = localStorage.getItem('grok_api_key') || '';
 
-        // Western Boundary
-        this.westBoundary = [
-            [21.0, 68.0],
-            [12.0, 71.0],
-            [10.5, 72.5],
-            [7.0, 73.0],
-            [6.0, 79.0]
+        // Indian 200-NM Maritime Boundary (Complete)
+        this.maritimeBoundary = [
+            [25, 64.5],
+            [15.0, 64.5],
+            [5.0, 69.5],
+            [4.0, 76.0],
+            [4.0, 84.0],
+            [6.0, 87.5],
+            [15.0, 93.0],
+            [21.5, 90.0]
         ];
-        // Eastern Boundary
-        this.eastBoundary = [
-            [9.0, 81.0],
-            [11.0, 93.0],
-            [13.0, 93.5],
-            [21.5, 88.0],
-            [21.0, 87.5]
-        ];
+        
+        // Smooth the boundary for better visualization
+        this.smoothedBoundary = this.smoothBoundary(this.maritimeBoundary, 300);
 
         // Piracy areas
         this.piracyAreas = [
@@ -56,6 +55,32 @@ class EnhancedMSASystem {
                 this.init();
             });
         });
+    }
+
+    smoothBoundary(points, numPoints) {
+        // Interpolate points along the boundary for smoother visualization
+        if (points.length < 2) return points;
+        
+        const smoothed = [];
+        const totalSegments = points.length - 1;
+        const pointsPerSegment = Math.floor(numPoints / totalSegments);
+        
+        for (let i = 0; i < points.length - 1; i++) {
+            const [lat1, lon1] = points[i];
+            const [lat2, lon2] = points[i + 1];
+            
+            for (let j = 0; j < pointsPerSegment; j++) {
+                const t = j / pointsPerSegment;
+                const lat = lat1 + (lat2 - lat1) * t;
+                const lon = lon1 + (lon2 - lon1) * t;
+                smoothed.push([lat, lon]);
+            }
+        }
+        
+        // Add the last point
+        smoothed.push(points[points.length - 1]);
+        
+        return smoothed;
     }
 
     async initDB() {
@@ -74,6 +99,33 @@ class EnhancedMSASystem {
             };
         });
     }
+    smoothBoundary(points, numPoints) {
+        // Interpolate points along the boundary for smoother visualization
+        if (points.length < 2) return points;
+
+        const smoothed = [];
+        const totalSegments = points.length - 1;
+        const pointsPerSegment = Math.floor(numPoints / totalSegments);
+
+        for (let i = 0; i < points.length - 1; i++) {
+            const [lat1, lon1] = points[i];
+            const [lat2, lon2] = points[i + 1];
+
+            for (let j = 0; j < pointsPerSegment; j++) {
+                const t = j / pointsPerSegment;
+                const lat = lat1 + (lat2 - lat1) * t;
+                const lon = lon1 + (lon2 - lon1) * t;
+                smoothed.push([lat, lon]);
+            }
+        }
+
+        // Add the last point
+        smoothed.push(points[points.length - 1]);
+
+        return smoothed;
+    }
+
+
 
     async saveDataToDB() {
         return new Promise((resolve, reject) => {
@@ -249,36 +301,57 @@ class EnhancedMSASystem {
     }
 
     initMaps() {
+        const worldBounds = [[-90, -180], [90, 180]];
+        
+        // Professional Satellite Map - Esri World Imagery
+        const satelliteTiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+        
         this.maps.mini = L.map('dashboard-mini-map', {
             zoomControl: false,
-            attributionControl: false
+            attributionControl: false,
+            maxBounds: worldBounds,
+            maxBoundsViscosity: 1.0,
+            worldCopyJump: false
         }).setView([11, 82], 5);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
+        L.tileLayer(satelliteTiles, {
+            attribution: 'Tiles &copy; Esri',
+            noWrap: true,
+            maxZoom: 18
         }).addTo(this.maps.mini);
 
         this.maps.main = L.map('main-map', {
             zoomControl: true,
-            attributionControl: true
+            attributionControl: true,
+            maxBounds: worldBounds,
+            maxBoundsViscosity: 1.0,
+            worldCopyJump: false
         }).setView([11, 82], 5);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
+        L.tileLayer(satelliteTiles, {
+            attribution: 'Tiles &copy; Esri',
+            noWrap: true,
+            maxZoom: 18
         }).addTo(this.maps.main);
 
-        this.layers.boundaryWest = L.polyline(this.westBoundary, { color: '#007bff', weight: 3, opacity: 0.8 }).bindTooltip("Indian Maritime Boundary (West)");
-        this.layers.boundaryEast = L.polyline(this.eastBoundary, { color: '#007bff', weight: 3, opacity: 0.8 }).bindTooltip("Indian Maritime Boundary (East)");
+        // Add Indian 200-NM Maritime Boundary
+        this.layers.maritimeBoundary = L.polyline(this.smoothedBoundary, {
+            color: '#0066cc',
+            weight: 2,
+            opacity: 0.8,
+            dashArray: '5, 5'
+        }).bindTooltip("India 200-NM Maritime Boundary");
 
         this.piracyAreas.forEach(area => {
             L.rectangle(area.bounds, { color: '#dc3545', weight: 2, opacity: 0.7, fillOpacity: 0.2 })
                 .bindTooltip(area.tooltip).addTo(this.layers.piracy);
         });
 
-        this.layers.boundaryWest.addTo(this.maps.mini);
-        this.layers.boundaryEast.addTo(this.maps.mini);
-        this.layers.boundaryWest.addTo(this.maps.main);
-        this.layers.boundaryEast.addTo(this.maps.main);
+        // Add maritime boundary to both maps
+        this.layers.maritimeBoundary.addTo(this.maps.mini);
+        this.layers.maritimeBoundary.addTo(this.maps.main);
+        
+        // Add other layers
         Object.values(this.layers).forEach(layer => {
-            if (layer !== this.layers.boundaryWest && layer !== this.layers.boundaryEast) {
+            if (layer !== this.layers.maritimeBoundary) {
                 layer.addTo(this.maps.mini);
                 layer.addTo(this.maps.main);
             }
@@ -291,7 +364,22 @@ class EnhancedMSASystem {
     }
 
     setupEventListeners() {
-        ['boundary', 'vessels', 'patrol', 'exercise', 'piracy', 'checkpoints'].forEach(layer => {
+        // Handle boundary toggle separately since it has a different ID
+        const boundaryToggle = document.getElementById('boundary-toggle');
+        if (boundaryToggle) {
+            boundaryToggle.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    this.layers.maritimeBoundary.addTo(this.maps.main);
+                    this.layers.maritimeBoundary.addTo(this.maps.mini);
+                } else {
+                    this.maps.main.removeLayer(this.layers.maritimeBoundary);
+                    this.maps.mini.removeLayer(this.layers.maritimeBoundary);
+                }
+            });
+        }
+        
+        // Handle other layer toggles
+        ['vessels', 'patrol', 'exercise', 'piracy', 'checkpoints'].forEach(layer => {
             const toggle = document.getElementById(`${layer}-toggle`);
             if (toggle) {
                 toggle.addEventListener('change', (e) => {
@@ -331,20 +419,47 @@ class EnhancedMSASystem {
             const fileType = file.name.split('.').pop().toLowerCase();
             let text = '';
             try {
-                if (['txt', 'md'].includes(fileType)) text = await file.text();
-                else if (fileType === 'docx') { const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() }); text = result.value; }
-                else if (fileType === 'xlsx') { const data = await file.arrayBuffer(); const workbook = XLSX.read(data, { type: 'array' }); text = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 }).join('\n'); }
-                else if (['pdf', 'jpg', 'png'].includes(fileType)) { 
-                    const result = await Tesseract.recognize(file, 'eng', {
-                        tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK
-                    });
-                    text = result.data.text;
-                } else throw new Error('Unsupported file type');
+                if (['txt', 'md'].includes(fileType)) {
+                    text = await file.text();
+                } else if (fileType === 'docx') {
+                    const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+                    text = result.value;
+                } else if (fileType === 'xlsx') {
+                    const data = await file.arrayBuffer();
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    text = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 }).join('\n');
+                } else if (['jpg', 'jpeg', 'png', 'webp', 'bmp'].includes(fileType)) {
+                    // Show loading indicator
+                    const loadingOverlay = document.getElementById('loading-overlay');
+                    if (loadingOverlay) {
+                        loadingOverlay.classList.remove('hidden');
+                        const loadingText = loadingOverlay.querySelector('p');
+                        if (loadingText) loadingText.textContent = 'Processing image with OCR (Tesseract.js)...';
+                    }
+                    
+                    try {
+                        text = await processOCRWithSarvam(file);
+                        if (uploadResults) uploadResults.innerHTML += `<p style="color: #00d4ff;">ℹ OCR extracted text from ${file.name}</p>`;
+                    } catch (ocrError) {
+                        if (loadingOverlay) loadingOverlay.classList.add('hidden');
+                        if (uploadResults) uploadResults.innerHTML += `<p style="color: #ff3366;">✗ OCR failed for ${file.name}: ${ocrError.message}</p>`;
+                        alert(`OCR Error: ${ocrError.message}\n\nTips:\n1. Ensure image has clear, readable text\n2. Try a higher resolution image\n3. Avoid handwritten text\n4. Use JPG, PNG, WEBP, or BMP format`);
+                        continue;
+                    } finally {
+                        if (loadingOverlay) loadingOverlay.classList.add('hidden');
+                    }
+                } else if (fileType === 'pdf') {
+                    if (uploadResults) uploadResults.innerHTML += `<p style="color: #ffc107;">⚠ PDF files are not supported for OCR. Please convert to image format (JPG/PNG) or extract text manually.</p>`;
+                    continue;
+                } else {
+                    throw new Error('Unsupported file type');
+                }
+                
                 const extracted = await this.extractDataFromText(text, file.name);
                 await this.processExtractedData(extracted, file.name);
-                if (uploadResults) uploadResults.innerHTML += `<p>Processed ${file.name}: ${extracted.vessels.length} vessels added.</p>`;
+                if (uploadResults) uploadResults.innerHTML += `<p style="color: #00ff88;">✓ Processed ${file.name}: ${extracted.vessels.length} vessels added.</p>`;
             } catch (error) {
-                if (uploadResults) uploadResults.innerHTML += `<p>Error processing ${file.name}: ${error.message}</p>`;
+                if (uploadResults) uploadResults.innerHTML += `<p style="color: #ff3366;">✗ Error processing ${file.name}: ${error.message}</p>`;
             }
         }
 
@@ -644,10 +759,11 @@ class EnhancedMSASystem {
         this.data.alerts = this.data.alerts.filter(a => !a.autoGenerated);
         const speedThreshold = 12;
         const boundarySegments = [];
-        [...this.westBoundary.slice(0, -1), ...this.eastBoundary.slice(0, -1)].forEach((p, i) => {
-            const arr = i < this.westBoundary.length - 1 ? this.westBoundary : this.eastBoundary;
-            boundarySegments.push([p, arr[i < this.westBoundary.length - 1 ? i + 1 : i - this.westBoundary.length + 2]]);
-        });
+        
+        // Create boundary segments from the maritime boundary
+        for (let i = 0; i < this.maritimeBoundary.length - 1; i++) {
+            boundarySegments.push([this.maritimeBoundary[i], this.maritimeBoundary[i + 1]]);
+        }
 
         // Collision detection
         const positionMap = new Map();
@@ -731,284 +847,4 @@ class EnhancedMSASystem {
             if (crosses) {
                 let msg = `Boundary Violation: Unidentified vessel ${vessel.name} crossed Indian maritime boundary`;
                 if (vessel.speed > speedThreshold) msg += ` at ${vessel.speed.toFixed(1)} knots`;
-                const navalVessels = this.data.vessels.filter(v => v.isFriendly && ['naval vessel', 'coast guard vessel'].includes(v.vesselType.toLowerCase()));
-                if (navalVessels.length > 0) {
-                    let nearest = navalVessels.reduce((a, b) => this.calculateDistance(vessel.lat, vessel.lon, a.lat, a.lon) < this.calculateDistance(vessel.lat, vessel.lon, b.lat, b.lon) ? a : b);
-                    const dist = this.calculateDistance(vessel.lat, vessel.lon, nearest.lat, nearest.lon);
-                    const eta = Math.floor(dist / (nearest.speed || 20) * 60);
-                    msg += `. Nearest naval vessel ${nearest.name} recommended. Distance: ${dist.toFixed(1)} NM. ETA: ${eta} min.`;
-                }
-                alerts.push({
-                    message: msg,
-                    priority: 'HIGH',
-                    lat: vessel.lat,
-                    lon: vessel.lon,
-                    timestamp: new Date().toISOString(),
-                    source: 'Auto Alert System',
-                    autoGenerated: true,
-                    vesselId: vessel.id
-                });
-            }
-
-            this.data.alerts.push(...alerts);
-        });
-
-        this.saveDataToDB();
-        this.updateAllUI();
-    }
-
-    updateMap() {
-        this.layers.vessels.clearLayers();
-        this.layers.checkpoints.clearLayers();
-        this.layers.patrol.clearLayers();
-        this.layers.exercise.clearLayers();
-
-        this.data.vessels.forEach(vessel => {
-            const isNaval = ['naval vessel', 'coast guard vessel'].includes(vessel.vesselType.toLowerCase());
-            const iconHtml = vessel.isFriendly && isNaval
-                ? `<i class="fas fa-anchor" style="color: #007bff; font-size: 20px;"></i>`
-                : `<i class="fas fa-ship" style="color: #dc3545; font-size: 20px;"></i>`;
-            const marker = L.marker([vessel.lat, vessel.lon], {
-                icon: L.divIcon({ className: 'vessel-icon', html: iconHtml })
-            }).bindTooltip(`
-                <b>${vessel.name}</b><br>Type: ${vessel.vesselType}<br>
-                Position: ${vessel.lat.toFixed(4)}°N, ${vessel.lon.toFixed(4)}°E<br>
-                Speed: ${vessel.speed} knots | Course: ${vessel.course}°
-            `);
-            marker.addTo(this.layers.vessels);
-            this.vesselMarkers[vessel.id] = marker;
-        });
-
-        this.data.checkpoints.forEach(cp => {
-            const marker = L.marker([cp.lat, cp.lon], {
-                icon: L.divIcon({ className: 'checkpoint-icon', html: '<i class="fas fa-map-pin" style="color: #ffc107; font-size: 20px;"></i>' })
-            }).bindTooltip(`${cp.name}<br>Source: ${cp.source}`);
-            marker.addTo(this.layers.checkpoints);
-            this.checkpointMarkers[cp.name] = marker;
-        });
-
-        this.data.patrolAreas.forEach(area => {
-            L.polygon(area.coords, { color: '#007bff', fillColor: '#007bff', fillOpacity: 0.2 })
-                .bindTooltip(area.tooltip).addTo(this.layers.patrol);
-        });
-
-        this.data.exerciseAreas.forEach(area => {
-            L.polygon(area.coords, { color: '#17a2b8', fillColor: '#17a2b8', fillOpacity: 0.2 })
-                .bindTooltip(area.tooltip).addTo(this.layers.exercise);
-        });
-
-        setTimeout(() => { this.maps.main.invalidateSize(); this.maps.mini.invalidateSize(); }, 100);
-    }
-
-    updateKPIs() {
-        document.getElementById('total-vessels').textContent = this.data.vessels.length;
-        document.getElementById('friendly-vessels').textContent = this.data.vessels.filter(v => v.isFriendly).length;
-        document.getElementById('suspicious-vessels').textContent = this.data.vessels.filter(v => !v.isFriendly).length;
-        document.getElementById('active-alerts').textContent = this.data.alerts.length;
-        document.getElementById('tracked-vessels').textContent = this.data.vessels.length;
-        document.getElementById('stat-total-vessels').textContent = this.data.vessels.length;
-        document.getElementById('stat-friendly-vessels').textContent = this.data.vessels.filter(v => v.isFriendly).length;
-        document.getElementById('stat-suspicious-vessels').textContent = this.data.vessels.filter(v => !v.isFriendly).length;
-        document.getElementById('stat-total-alerts').textContent = this.data.alerts.length;
-    }
-
-    updateVesselsTable() {
-        const tbody = document.getElementById('vessels-table-body');
-        if (!tbody) return;
-        tbody.innerHTML = this.data.vessels.length > 0 ? this.data.vessels.map(v => `
-            <tr>
-                <td>${v.id}</td>
-                <td>${v.name}</td>
-                <td>${v.vesselType}</td>
-                <td><span class="status ${v.isFriendly ? 'friendly' : 'suspicious'}">${v.isFriendly ? 'Friendly' : 'Unidentified'}</span></td>
-                <td>${v.lat.toFixed(4)}°N, ${v.lon.toFixed(4)}°E</td>
-                <td>${v.speed} knots</td>
-                <td>
-                    <button class="btn btn--info btn--small" onclick="zoomToVessel('${v.id}')">Track</button>
-                    <button class="btn btn--danger btn--small" onclick="removeVessel('${v.id}')">Remove</button>
-                </td>
-            </tr>
-        `).join('') : '<tr><td colspan="7" class="text-center">No vessels available</td></tr>';
-    }
-
-    updateAlertsList() {
-        const list = document.getElementById('alerts-list');
-        if (!list) return;
-        this.data.alerts.forEach((alert, index) => {
-            if (!alert.id) {
-                alert.id = `ALERT_${Date.now()}_${index}`;
-            }
-        });
-        list.innerHTML = this.data.alerts.length > 0 ? this.data.alerts.map(a => `
-            <div class="alert-card">
-                <h4>Alert ${a.id}</h4>
-                <p><b>Priority:</b> ${a.priority}</p>
-                <p><b>Location:</b> ${a.lat ? a.lat.toFixed(4) + '°N, ' + a.lon.toFixed(4) + '°E' : 'N/A'}</p>
-                <p><b>Message:</b> ${a.message}</p>
-                <p><b>Source:</b> ${a.source}</p>
-                <p><b>Timestamp:</b> ${new Date(a.timestamp).toLocaleString()}</p>
-                <button class="btn btn--info btn--small" onclick="msaSystem.zoomToAlertLocation(${a.lat}, ${a.lon})">View on Map</button>
-            </div>
-        `).join('') : '<div class="alert-card"><p>No alerts available</p></div>';
-    }
-
-    updateRecentAlerts() {
-        const recent = document.getElementById('recent-alerts');
-        if (!recent) return;
-        recent.innerHTML = this.data.alerts.length > 0 ? this.data.alerts.slice(0, 5).map(a => `
-            <div class="alert-item">
-                <p><b>${a.priority} Alert:</b> ${a.message}</p>
-                <small>${new Date(a.timestamp).toLocaleString()}</small>
-            </div>
-        `).join('') : '<div class="alert-item"><p>No recent alerts</p></div>';
-    }
-
-    updateVesselSummary() {
-        const summary = document.getElementById('vessel-summary');
-        if (!summary) return;
-        summary.innerHTML = this.data.vessels.length > 0 ? this.data.vessels.slice(0, 5).map(v => `
-            <div class="vessel-item">
-                <p><b>${v.name}</b> (${v.vesselType})</p>
-                <p>Position: ${v.lat.toFixed(4)}°N, ${v.lon.toFixed(4)}°E</p>
-                <small>Speed: ${v.speed} knots | Course: ${v.course}°</small>
-            </div>
-        `).join('') : '<div class="vessel-item"><p>No vessels available</p></div>';
-    }
-
-    updateLastUpdateTime() {
-        const el = document.getElementById('last-update-time');
-        if (el) el.textContent = new Date().toLocaleString();
-    }
-
-    updateAllUI() {
-        this.updateMap();
-        this.updateKPIs();
-        this.updateVesselsTable();
-        this.updateAlertsList();
-        this.updateRecentAlerts();
-        this.updateVesselSummary();
-        this.updateLastUpdateTime();
-        setTimeout(() => { this.maps.main.invalidateSize(); this.maps.mini.invalidateSize(); }, 200);
-    }
-
-    zoomToVessel(vesselId) {
-        const vessel = this.data.vessels.find(v => v.id === vesselId);
-        if (vessel) {
-            this.maps.main.setView([vessel.lat, vessel.lon], 15);
-            this.vesselMarkers[vesselId].openTooltip();
-            this.navigateToPage('map');
-        }
-    }
-
-    zoomToAlertLocation(lat, lon) {
-        if (lat != null && lon != null) {
-            this.maps.main.setView([lat, lon], 15);
-            this.navigateToPage('map');
-            Object.values(this.vesselMarkers).forEach(m => m.closeTooltip());
-            const vesselAtLocation = this.data.vessels.find(v => 
-                Math.abs(v.lat - lat) < 0.0001 && Math.abs(v.lon - lon) < 0.0001
-            );
-            if (vesselAtLocation && this.vesselMarkers[vesselAtLocation.id]) {
-                this.vesselMarkers[vesselAtLocation.id].openTooltip();
-            }
-        }
-    }
-
-    closeAllTooltips() {
-        Object.values(this.vesselMarkers).forEach(marker => marker.closeTooltip());
-    }
-
-    loginToSystem() {
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-        if (username && password) {
-            document.getElementById('login-screen').classList.add('hidden');
-            document.getElementById('main-app').classList.remove('hidden');
-            document.getElementById('current-user').textContent = username;
-            this.updateAllUI();
-        } else {
-            alert('Please enter valid credentials.');
-        }
-    }
-
-    logoutFromSystem() {
-        this.saveDataToDB();
-        document.getElementById('main-app').classList.add('hidden');
-        document.getElementById('login-screen').classList.remove('hidden');
-    }
-
-    navigateToPage(page) {
-        this.currentPage = page;
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.getElementById(`${page}-page`)?.classList.add('active');
-        document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-        document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
-        if (page === 'dashboard' || page === 'map') {
-            setTimeout(() => { this.maps.main.invalidateSize(); this.maps.mini.invalidateSize(); }, 100);
-        }
-    }
-
-    async processProvidedData() {}
-
-    exportData(type) {
-        if (type === 'txt') {
-            const textData = this.formatDataToText();
-            const blob = new Blob([textData], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'msa_data.txt';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        } else if (type === 'csv') {
-            let csv = 'ID,Name,Type,Latitude,Longitude,Speed,Course,Friendly,Flag,Source,Pennant/IMO,Registry\n';
-            this.data.vessels.forEach(v => {
-                csv += `${v.id},${v.name},${v.vesselType},${v.lat},${v.lon},${v.speed},${v.course},${v.isFriendly},${v.flag || 'Unknown'},${v.source || 'Unknown'},${v.pennantIMO || 'Unknown'},${v.registry || 'Unknown'}\n`;
-            });
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'vessel_data.csv';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-    }
-
-    async refreshAllData() {
-        await this.loadDataFromDB();
-        this.updateAllUI();
-        this.generateAlerts();
-    }
-
-    backupData() {
-        this.exportData('txt');
-    }
-
-    async clearAllData() {
-        if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
-            await new Promise((resolve) => {
-                const transaction = this.db.transaction(['data'], 'readwrite');
-                const store = transaction.objectStore('data');
-                store.clear();
-                transaction.oncomplete = resolve;
-            });
-            this.data = { vessels: [], alerts: [], uploadHistory: [], checkpoints: [], patrolAreas: [], exerciseAreas: [] };
-            this.updateAllUI();
-        }
-    }
-}
-
-const msaSystem = new EnhancedMSASystem();
-
-function loginToSystem() { msaSystem.loginToSystem(); }
-function logoutFromSystem() { msaSystem.logoutFromSystem(); }
-function navigateToPage(page) { msaSystem.navigateToPage(page); }
-function zoomToVessel(vesselId) { msaSystem.zoomToVessel(vesselId); }
-function removeVessel(vesselId) { msaSystem.removeVessel(vesselId); }
-function processText() { msaSystem.processText(); }
-function clearText() { msaSystem.clearText(); }
+                const navalVessels = this.data.vessels.filter(v => v.isFriendly 
